@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import Navbar from '@/components/Navbar';
 import UnifiedSearchBar from '@/components/UnifiedSearchBar';
 import UnifiedRouteTimeline from '@/components/UnifiedRouteTimeline';
@@ -10,17 +11,34 @@ import SeatFareInquiry from '@/components/SeatFareInquiry';
 import { POPULAR_TRAINS } from '@/data/trainData';
 import { TrainDetails } from '@/types';
 import {
-  Activity,
   Wifi,
   Train,
   CheckCircle2,
+  Map,
+  List,
+  Columns,
+  Sparkles,
 } from 'lucide-react';
 
+const LiveMap = dynamic(() => import('@/components/LiveMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[600px] w-full rounded-3xl bg-slate-900/90 flex items-center justify-center border border-white/10 text-cyan-400">
+      <div className="flex items-center space-x-2">
+        <span className="w-3 h-3 rounded-full bg-cyan-400 animate-ping"></span>
+        <span className="text-sm font-semibold">Loading Live Satellite Radar Map...</span>
+      </div>
+    </div>
+  ),
+});
+
 export default function Home() {
-  const [selectedTrain, setSelectedTrain] = useState<TrainDetails>(POPULAR_TRAINS[0]);
+  const [selectedTrain, setSelectedTrain] = useState<TrainDetails>(POPULAR_TRAINS[5] || POPULAR_TRAINS[0]);
   const [activeView, setActiveView] = useState<'tracker' | 'board' | 'pnr' | 'fare'>('tracker');
+  const [trackerMode, setTrackerMode] = useState<'timeline' | 'map' | 'split'>('timeline');
   const [isLiveTelemetryActive, setIsLiveTelemetryActive] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string>('Just now');
 
   // Fetch real-time live train data whenever a train is selected or searched
   const fetchLiveStatusForTrain = async (trainNo: string) => {
@@ -30,6 +48,7 @@ export default function Home() {
       const json = await res.json();
       if (json.success && json.data) {
         setSelectedTrain(json.data);
+        setLastSyncTime(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       }
     } catch (err) {
       console.warn('Failed to fetch real-time train status:', err);
@@ -65,6 +84,8 @@ export default function Home() {
     setActiveView('tracker');
   };
 
+  const isWideContainer = activeView === 'tracker' && trackerMode === 'split';
+
   return (
     <div className="min-h-screen flex flex-col bg-[#070d1d] selection:bg-blue-600 selection:text-white">
       {/* Top Universal Navbar */}
@@ -72,7 +93,7 @@ export default function Home() {
 
       {/* Live Telemetry Status Bar */}
       <div className="bg-slate-950/70 border-b border-white/5 py-2.5">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+        <div className={`mx-auto px-4 sm:px-6 ${isWideContainer ? 'max-w-6xl' : 'max-w-4xl'}`}>
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center space-x-3">
               <span className="flex h-2.5 w-2.5 relative">
@@ -85,6 +106,48 @@ export default function Home() {
             </div>
 
             <div className="flex items-center space-x-3">
+              {/* Tracker Display Switcher (Timeline vs Map vs Split) */}
+              {activeView === 'tracker' && (
+                <div className="flex items-center space-x-1 bg-slate-900 p-0.5 rounded-xl border border-white/5">
+                  <button
+                    onClick={() => setTrackerMode('timeline')}
+                    className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                      trackerMode === 'timeline'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                    title="Timeline Focus"
+                  >
+                    <List className="w-3 h-3" />
+                    <span className="hidden sm:inline">Timeline</span>
+                  </button>
+                  <button
+                    onClick={() => setTrackerMode('map')}
+                    className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                      trackerMode === 'map'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                    title="Live Radar Map"
+                  >
+                    <Map className="w-3 h-3" />
+                    <span className="hidden sm:inline">GPS Map</span>
+                  </button>
+                  <button
+                    onClick={() => setTrackerMode('split')}
+                    className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                      trackerMode === 'split'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                    title="Split Screen"
+                  >
+                    <Columns className="w-3 h-3" />
+                    <span className="hidden sm:inline">Split</span>
+                  </button>
+                </div>
+              )}
+
               <button
                 onClick={() => setIsLiveTelemetryActive(!isLiveTelemetryActive)}
                 className={`flex items-center space-x-1.5 px-3 py-1 rounded-xl border text-[11px] font-semibold transition ${
@@ -96,14 +159,13 @@ export default function Home() {
                 <Wifi className="w-3 h-3" />
                 <span>Live Feed: {isLiveTelemetryActive ? 'SYNCING (15s)' : 'PAUSED'}</span>
               </button>
-              <span className="text-slate-400 hidden sm:inline">RTIS Live Feed</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Container */}
-      <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-6">
+      <main className={`flex-1 w-full mx-auto px-4 sm:px-6 py-6 ${isWideContainer ? 'max-w-6xl' : 'max-w-3xl'}`}>
         {/* Universal Search Bar (Always visible in tracker mode) */}
         {activeView === 'tracker' && (
           <UnifiedSearchBar
@@ -113,14 +175,37 @@ export default function Home() {
           />
         )}
 
-        {/* PRIMARY VIEW: Full-Focus Route Timeline (Map removed as requested) */}
+        {/* PRIMARY VIEW: Live Tracker */}
         {activeView === 'tracker' && (
           <div className="w-full">
-            <UnifiedRouteTimeline
-              train={selectedTrain}
-              onRefresh={() => fetchLiveStatusForTrain(selectedTrain.trainNumber)}
-              isRefreshing={isRefreshing}
-            />
+            {trackerMode === 'timeline' && (
+              <UnifiedRouteTimeline
+                train={selectedTrain}
+                onRefresh={() => fetchLiveStatusForTrain(selectedTrain.trainNumber)}
+                isRefreshing={isRefreshing}
+              />
+            )}
+
+            {trackerMode === 'map' && (
+              <div className="space-y-4">
+                <LiveMap train={selectedTrain} />
+              </div>
+            )}
+
+            {trackerMode === 'split' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                <div>
+                  <UnifiedRouteTimeline
+                    train={selectedTrain}
+                    onRefresh={() => fetchLiveStatusForTrain(selectedTrain.trainNumber)}
+                    isRefreshing={isRefreshing}
+                  />
+                </div>
+                <div className="sticky top-20">
+                  <LiveMap train={selectedTrain} />
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -148,7 +233,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="mt-auto border-t border-white/5 bg-slate-950 py-6 text-xs text-slate-400">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6">
+        <div className={`mx-auto px-4 sm:px-6 ${isWideContainer ? 'max-w-6xl' : 'max-w-3xl'}`}>
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center space-x-3">
               <div className="p-2 rounded-xl bg-blue-600/10 border border-blue-500/20 text-cyan-400">
